@@ -1,0 +1,56 @@
+name: task
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # «пинок» раз в полчаса; GitHub всё равно растягивает.
+  workflow_dispatch:          # ручной запуск из вкладки Actions.
+
+permissions:
+  contents: read              # коммиты больше не нужны — состояние в кэше.
+
+concurrency:
+  group: task
+  cancel-in-progress: false   # новый запуск встаёт в очередь, не обрывая текущий.
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      # Тянем сохранённое состояние из кэша (свежайший ключ state-*).
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+
+      # Один запуск ~55 минут проверяет канал каждые 5 минут.
+      - name: Run loop
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          SOURCE: ${{ secrets.SOURCE }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          TERMS: ${{ secrets.TERMS }}
+        run: |
+          end=$((SECONDS + 3300))
+          while [ $SECONDS -lt $end ]; do
+            python check.py || true
+            [ $SECONDS -lt $end ] && sleep 300
+          done
+
+      # Сохраняем состояние в кэш — без коммитов в репозиторий.
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}

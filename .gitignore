@@ -1,0 +1,9 @@
+.env
+*.session
+*.session-journal
+subscribers.db
+__pycache__/
+
+# локальный always-on вариант — в публичный репозиторий не выкладывается
+bot.py
+db.py
