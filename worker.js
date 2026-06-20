@@ -15,7 +15,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/run") {
-      if (url.searchParams.get("key") !== String(env.CHAT_ID)) {
+      if (url.searchParams.get("key") !== clean(env.CHAT_ID)) {
         return new Response("forbidden", { status: 403 });
       }
       const summary = await run(env);
@@ -25,9 +25,16 @@ export default {
   },
 };
 
+// Секреты, заведённые через PowerShell-пайп, приносят BOM (﻿) в начале —
+// срезаем его и пробелы при каждом чтении, иначе ломаются URL и сравнения.
+function clean(s) {
+  return (s ?? "").replace(/^﻿/, "").trim();
+}
+
 async function run(env) {
-  const source = env.SOURCE;
-  const terms = env.TERMS.split(",")
+  const source = clean(env.SOURCE);
+  const terms = clean(env.TERMS)
+    .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
@@ -84,6 +91,13 @@ async function fetchPosts(source) {
       text(t) {
         if (current) current.text += t.text;
       },
+    })
+    // Переносы строк <br> не дают текста — без них слова с соседних
+    // строк слипаются («ЗуевоМосковская»), ломая границы слов. Вставляем пробел.
+    .on(".tgme_widget_message_text br", {
+      element() {
+        if (current) current.text += " ";
+      },
     });
 
   await rewriter.transform(resp).arrayBuffer();
@@ -122,11 +136,11 @@ function esc(s) {
 }
 
 async function send(env, html) {
-  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+  await fetch(`https://api.telegram.org/bot${clean(env.BOT_TOKEN)}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id: env.CHAT_ID,
+      chat_id: clean(env.CHAT_ID),
       text: html,
       parse_mode: "HTML",
       disable_web_page_preview: false,
