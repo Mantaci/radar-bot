@@ -3,6 +3,8 @@
 *.session-journal
 subscribers.db
 __pycache__/
+node_modules/
+.wrangler/
 
 # локальный always-on вариант — в публичный репозиторий не выкладывается
 bot.py
